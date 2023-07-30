@@ -39,7 +39,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get -y install dput-ng python3-paramiko devscripts libdistro-info-perl --no-install-recommends
+          sudo apt-get -y install dput-ng python3-paramiko devscripts debhelper
 
       - name: Build
         env:
