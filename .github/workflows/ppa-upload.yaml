@@ -45,13 +45,13 @@ jobs:
         env:
           gcc: gcc-11
           DEBEMAIL: "ingo@jitsi.org"
-          DEBNAME: "Ingo Bauersachs"
+          DEBFULLNAME: "Ingo Bauersachs"
         run: |
           cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
+          dch -D jammy --local ".ib" --changelog debian.master/changelog "Fix invoking zstd with no files" || true
           fakeroot debian/rules clean
           # fix zstd compression command
           sed -i "s/xargs/xargs -r/" debian/rules.d/2-binary-arch.mk
-          dch -D jammy --local ".ib" --changelog debian.master/changelog "Fix invoking zstd with no files"
           dpkg-buildpackage -d -S --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
 
       - name: Upload as artifact
