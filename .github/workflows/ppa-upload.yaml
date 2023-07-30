@@ -1,0 +1,59 @@
+name: Installers
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: Versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Tag
+        id: tag
+        run: |
+          curl -o Makefile https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/Makefile?h=linux-rolling-stable
+          echo "KERNEL_TAG=$(head -4 Makefile | tail -3 | sed 's/[A-Z =]//g' | sed ':a;N;$!ba;s/\n/\./g')" >> "$GITHUB_OUTPUT"
+          rm Makefile
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: git://git.launchpad.net/~ubuntu-kernel-test/ubuntu/+source/linux/+git/mainline-crack
+          ref: "cod/mainline/${{ steps.tag.outputs.KERNEL_TAG }}"
+          path: "linux/${{ steps.tag.outputs.KERNEL_TAG }}"
+          fetch-depth: 1
+
+      - name: Build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install dput-ng python3-paramiko devscripts libdistro-info-perl --no-install-recommends
+
+      - name: Import GPG key
+        run: |
+          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Build
+        env:
+          gcc: gcc-11
+          DEBEMAIL: "ingo@jitsi.org"
+          DEBNAME: "Ingo Bauersachs"
+        run: |
+          cd "linux/${{ steps.tag.outputs.KERNEL_TAG }}"
+          fakeroot debian/rules clean
+          # fix zstd compression command
+          sed -i "s/xargs/xargs -r/" debian/rules.d/02-binary-arch.mk
+          dch -D jammy --local ".ib" --changelog debian.master/changelog "Fix invoking zstd with no files"
+          dpkg-buildpackage -d -S --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
+
+      - name: Upload
+        run: |
+          dput ppa:ibauersachs/mainline-kernel linux_*.changes
