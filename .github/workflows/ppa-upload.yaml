@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   version:
-    name: Versioning
+    name: Jammy Mainline
     runs-on: ubuntu-latest
     steps:
       - name: Get Tag
@@ -22,12 +22,12 @@ jobs:
           rm Makefile
 
       - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          repository: git://git.launchpad.net/~ubuntu-kernel-test/ubuntu/+source/linux/+git/mainline-crack
-          ref: "cod/mainline/${{ steps.tag.outputs.KERNEL_TAG }}"
-          path: "linux/${{ steps.tag.outputs.KERNEL_TAG }}"
-          fetch-depth: 1
+        run: |
+          git clone \
+            --depth 1 \
+            --branch "cod/mainline/v${{ steps.tag.outputs.KERNEL_TAG }}" \
+            "https://git.launchpad.net/~ubuntu-kernel-test/ubuntu/+source/linux/+git/mainline-crack" \
+            "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
 
       - name: Build dependencies
         env:
