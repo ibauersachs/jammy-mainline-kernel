@@ -47,7 +47,7 @@ jobs:
           DEBEMAIL: "ingo@jitsi.org"
           DEBNAME: "Ingo Bauersachs"
         run: |
-          cd "linux/${{ steps.tag.outputs.KERNEL_TAG }}"
+          cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
           fakeroot debian/rules clean
           # fix zstd compression command
           sed -i "s/xargs/xargs -r/" debian/rules.d/02-binary-arch.mk
