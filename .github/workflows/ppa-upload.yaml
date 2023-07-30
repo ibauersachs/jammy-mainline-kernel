@@ -43,12 +43,12 @@ jobs:
 
       - name: Build
         env:
-          gcc: gcc-11
           DEBEMAIL: "ingo@jitsi.org"
           DEBFULLNAME: "Ingo Bauersachs"
         run: |
           cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
           dch -D jammy --local ".ib" --changelog debian.master/changelog "Fix invoking zstd with no files" || true
+          sed -i "s/gcc-13/gcc-11/" debian/rules.d/0-common-vars.mk
           fakeroot debian/rules clean
           # fix zstd compression command
           sed -i "s/xargs/xargs -r/" debian/rules.d/2-binary-arch.mk
