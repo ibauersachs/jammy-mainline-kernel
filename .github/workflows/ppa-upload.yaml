@@ -14,6 +14,11 @@ jobs:
     name: Jammy Mainline
     runs-on: ubuntu-latest
     steps:
+      - name: Import GPG key
+        run: |
+          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
       - name: Get Tag
         id: tag
         run: |
@@ -35,11 +40,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get -y install dput-ng python3-paramiko devscripts libdistro-info-perl --no-install-recommends
-
-      - name: Import GPG key
-        run: |
-          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
 
       - name: Build
         env:
