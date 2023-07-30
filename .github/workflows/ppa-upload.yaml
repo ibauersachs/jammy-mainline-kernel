@@ -54,6 +54,13 @@ jobs:
           dch -D jammy --local ".ib" --changelog debian.master/changelog "Fix invoking zstd with no files"
           dpkg-buildpackage -d -S --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
 
-      - name: Upload
+      - name: Upload as artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: files
+          path: "linux_*"
+
+      - name: Upload to PPA
         run: |
           dput ppa:ibauersachs/mainline-kernel linux_*.changes
