@@ -1,33 +1,52 @@
 name: Installers
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - master
+  workflow_dispatch:
+  schedule:
+    # run every day at 06:13 and 20:13 UTC
+    - cron:  '13 6,20 * * *'
 
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
+
+env:
+  DEBEMAIL: "ingo@jitsi.org"
+  DEBFULLNAME: "Ingo Bauersachs"
+  DEBIAN_FRONTEND: noninteractive
 
 jobs:
   version:
     name: Jammy Mainline
     runs-on: ubuntu-latest
     steps:
-      - name: Import GPG key
-        run: |
-          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
-
-      - name: Get Tag
+      - name: Get Current LTS Kernel Tag
         id: tag
         run: |
-          curl -o Makefile https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/Makefile?h=linux-rolling-stable
-          echo "KERNEL_TAG=$(head -4 Makefile | tail -3 | sed 's/[A-Z =]//g' | sed ':a;N;$!ba;s/\n/\./g')" >> "$GITHUB_OUTPUT"
-          rm Makefile
+          KERNEL_TAG="$(git ls-remote --tags --refs https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git | grep -Eoh 'v[0-9]+[.0-9]+$' | sort -Vk1 | tail -n1)"
+          echo "KERNEL_TAG=${KERNEL_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if a build for the current Kernel has already run
+        run: |
+          ! git ls-remote --exit-code --tags ${{ github.server_url }}/${{ github.repository }} "v${{ steps.tag.outputs.KERNEL_TAG }}"
 
       - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Checkout Meta
+        run: |
+          git clone \
+            --depth 1 \
+            "https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux-meta/+git/jammy/" \
+            "linux-meta"
+          rm -rf linux-meta/debian/control.d
+          cp -r linux-meta-patched/* linux-meta/
+          sed -i -E "s/(gencontrol_flags.+?(virtualbox|wireguard).+)/#\1/g" linux-meta/debian/rules
+
+      - name: Checkout Kernel
         run: |
           git clone \
             --depth 1 \
@@ -36,16 +55,16 @@ jobs:
             "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
 
       - name: Build dependencies
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
           sudo apt-get -y install dput-ng python3-paramiko devscripts debhelper
 
-      - name: Build
-        env:
-          DEBEMAIL: "ingo@jitsi.org"
-          DEBFULLNAME: "Ingo Bauersachs"
+      - name: Import GPG key
+        run: |
+          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Build Kernel Source Package
         run: |
           cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
           dch -D jammy --newversion "$(head -1 debian.master/changelog | grep -Eoh '${{ steps.tag.outputs.KERNEL_TAG }}-[0-9]+').$(date +%Y%m%d%H%M)" --changelog debian.master/changelog "Fix invoking zstd with no files" || true
@@ -62,6 +81,26 @@ jobs:
           name: files
           path: "linux_*"
 
+      - name: Build Meta Package
+        run: |
+          cd linux-meta
+          ./update-version "../linux-${{ steps.tag.outputs.KERNEL_TAG }}"
+          fakeroot debian/rules clean
+          dpkg-buildpackage -d -S --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
+
+      - name: Upload as artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: files
+          path: "linux-meta_*"
+
       - name: Upload to PPA
         run: |
           dput ppa:ibauersachs/mainline-kernel linux_*.changes
+          dput ppa:ibauersachs/mainline-kernel linux-meta_*.changes
+
+      - name: Mark as built
+        run: |
+          git tag "v${{ steps.tag.outputs.KERNEL_TAG }}"
+          git push
