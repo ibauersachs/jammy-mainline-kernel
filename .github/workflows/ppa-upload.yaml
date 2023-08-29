@@ -70,7 +70,7 @@ jobs:
       - name: Build Kernel Source Package
         run: |
           cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
-          dch -D jammy --newversion "$(head -1 debian.master/changelog | grep -Eoh '${{ steps.tag.outputs.KERNEL_TAG }}-[0-9]+').$(date +%Y%m%d%H%M)" --changelog debian.master/changelog "Fix invoking zstd with no files" || true
+          dch -D jammy --newversion "$(head -1 debian.master/changelog | grep -Eoh "${{ steps.tag.outputs.KERNEL_TAG }}(\\.0)?-[0-9]+").$(date +%Y%m%d%H%M)" --changelog debian.master/changelog "Fix invoking zstd with no files" || true
           sed -i "s/gcc-13/gcc-11/" debian/rules.d/0-common-vars.mk
           fakeroot debian/rules clean
           # fix zstd compression command
