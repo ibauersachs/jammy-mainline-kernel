@@ -73,8 +73,8 @@ jobs:
           dch -D jammy --newversion "$(head -1 debian.master/changelog | grep -Eoh "${{ steps.tag.outputs.KERNEL_TAG }}(\\.0)?-[0-9]+").$(date +%Y%m%d%H%M)" --changelog debian.master/changelog "GCC-11 no Rust build for Jammy" || true
           # Remove rust dependencies
           sed -i "/rust.*/d" debian.master/control.stub.in
-          sed -i "/clang-15.*/d" debian.master/control.stub.in
-          sed -i "/libclang1-15.*/d" debian.master/control.stub.in
+          sed -i "/clang-17.*/d" debian.master/control.stub.in
+          sed -i "/libclang1-17.*/d" debian.master/control.stub.in
           sed -i "/bindgen.*/d" debian.master/control.stub.in
           sed -i "/CONFIG_RUST_IS_AVAILABLE.*/d" debian.master/config/annotations
           # Switch compiler back to gcc 11
