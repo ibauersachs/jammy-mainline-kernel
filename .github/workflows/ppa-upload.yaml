@@ -88,7 +88,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: files
+          name: linux
           path: "linux_*"
 
       - name: Build Meta Package
@@ -102,7 +102,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: files
+          name: linux-meta
           path: "linux-meta_*"
 
       - name: Upload to PPA
