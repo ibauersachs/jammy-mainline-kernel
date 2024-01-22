@@ -1,0 +1,118 @@
+name: Auto Kernel 6.6.x Upload
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+  schedule:
+    # run every day at 06:13 and 20:13 UTC
+    - cron:  '13 6,20 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  DEBEMAIL: "ingo@jitsi.org"
+  DEBFULLNAME: "Ingo Bauersachs"
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  version:
+    permissions:
+      # for git push
+      contents: write
+    name: Jammy Mainline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Current LTS Kernel Tag
+        id: tag
+        run: |
+          KERNEL_TAG="$(git ls-remote --tags --refs https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git | grep -Eoh 'v6\.6\.[0-9]+$' | sort -Vk1 | tail -n1)"
+          echo "KERNEL_TAG=${KERNEL_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if a build for the current Kernel has already run
+        run: |
+          ! git ls-remote --exit-code --tags ${{ github.server_url }}/${{ github.repository }} "v${{ steps.tag.outputs.KERNEL_TAG }}"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout Meta
+        run: |
+          git clone \
+            --depth 1 \
+            "https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux-meta/+git/jammy/" \
+            "linux-meta"
+          rm -rf linux-meta/debian/control.d
+          cp -r linux-meta-patched/* linux-meta/
+          sed -i -E "s/(gencontrol_flags.+?(virtualbox|wireguard).+)/#\1/g" linux-meta/debian/rules
+
+      - name: Checkout Kernel
+        run: |
+          git clone \
+            --depth 1 \
+            --branch "cod/mainline/v${{ steps.tag.outputs.KERNEL_TAG }}" \
+            "https://git.launchpad.net/~ubuntu-kernel-test/ubuntu/+source/linux/+git/mainline-crack" \
+            "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install dput-ng python3-paramiko devscripts debhelper
+
+      - name: Import GPG key
+        run: |
+          cat <(echo -e "${{ secrets.GPG_LAUNCHPAD }}") | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
+      - name: Build Kernel Source Package
+        run: |
+          cd "linux-${{ steps.tag.outputs.KERNEL_TAG }}"
+          dch -D jammy --newversion "$(head -1 debian.master/changelog | grep -Eoh "${{ steps.tag.outputs.KERNEL_TAG }}(\\.0)?-[0-9]+").$(date +%Y%m%d%H%M)" --changelog debian.master/changelog "GCC-11 no Rust build for Jammy" || true
+          # Remove rust dependencies
+          sed -i "/rust.*/d" debian.master/control.stub.in
+          sed -i "/clang-.*/d" debian.master/control.stub.in
+          sed -i "/libclang1-.*/d" debian.master/control.stub.in
+          sed -i "/bindgen.*/d" debian.master/control.stub.in
+          sed -i "/CONFIG_RUST_IS_AVAILABLE.*/d" debian.master/config/annotations
+          # Switch compiler back to gcc 11
+          sed -i "s/gcc-13/gcc-11/" debian/rules.d/0-common-vars.mk
+          fakeroot debian/rules clean
+          # fix zstd compression command
+          sed -i "s/xargs/xargs -r/" debian/rules.d/2-binary-arch.mk
+          dpkg-buildpackage --no-check-builddeps --build=source --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
+
+      - name: Upload as artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: "linux_*"
+
+      - name: Build Meta Package
+        run: |
+          cd linux-meta
+          ./update-version "../linux-${{ steps.tag.outputs.KERNEL_TAG }}"
+          fakeroot debian/rules clean
+          dpkg-buildpackage --no-check-builddeps --build=source --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
+
+      - name: Upload as artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-meta
+          path: "linux-meta_*"
+
+      - name: Upload to PPA
+        run: |
+          dput ppa:ibauersachs/mainline-kernel-6.6 linux_*.changes
+          dput ppa:ibauersachs/mainline-kernel-6.6 linux-meta_*.changes
+
+      - name: Mark as built
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag "v${{ steps.tag.outputs.KERNEL_TAG }}"
+          git push --tags
