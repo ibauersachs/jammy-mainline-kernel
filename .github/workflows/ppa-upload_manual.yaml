@@ -1,4 +1,4 @@
-name: Installers
+name: Manual Kernel Upload
 
 on:
   workflow_dispatch:
