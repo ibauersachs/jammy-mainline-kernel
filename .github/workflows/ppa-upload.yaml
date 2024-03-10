@@ -94,6 +94,7 @@ jobs:
       - name: Build Meta Package
         run: |
           cd linux-meta
+          cp -f "../linux-${{ steps.tag.outputs.KERNEL_TAG }}/debian.master/dkms-versions" "../linux-${{ steps.tag.outputs.KERNEL_TAG }}/debian/dkms-versions"
           ./update-version "../linux-${{ steps.tag.outputs.KERNEL_TAG }}"
           fakeroot debian/rules clean
           dpkg-buildpackage --no-check-builddeps --build=source --sign-key=FA64266C2979E1702BCA904EC532E6511AA8714C
