@@ -78,7 +78,7 @@ jobs:
           sed -i "/bindgen.*/d" debian.master/control.stub.in
           sed -i "/CONFIG_RUST_IS_AVAILABLE.*/d" debian.master/config/annotations
           # Switch compiler back to gcc 11
-          sed -i "s/gcc-13/gcc-11/" debian/rules.d/0-common-vars.mk
+          sed -i "s/gcc-14/gcc-11/" debian/rules.d/0-common-vars.mk
           fakeroot debian/rules clean
           # fix zstd compression command
           sed -i "s/xargs/xargs -r/" debian/rules.d/2-binary-arch.mk
